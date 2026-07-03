@@ -67,6 +67,8 @@ def validate_tool_use_result_messages(messages: list[SamplingMessage]) -> None:
 
     last_content = messages[-1].content_as_list
     has_tool_results = any(c.type == "tool_result" for c in last_content)
+    if not has_tool_results:
+        return
 
     previous_content = messages[-2].content_as_list if len(messages) >= 2 else None
     has_previous_tool_use = previous_content and any(c.type == "tool_use" for c in previous_content)

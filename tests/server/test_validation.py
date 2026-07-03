@@ -159,3 +159,17 @@ def test_validate_tool_use_result_messages_no_error_when_tool_result_matches_too
         ),
     ]
     validate_tool_use_result_messages(messages)  # Should not raise
+
+
+def test_validate_tool_use_result_messages_no_error_when_tool_use_not_followed_by_tool_result() -> None:
+    messages = [
+        SamplingMessage(
+            role="assistant",
+            content=[
+                TextContent(type="text", text="Hold on..."),
+                ToolUseContent(type="tool_use", id="abc", name="search", input={"q": "test"}),
+            ],
+        ),
+        SamplingMessage(role="user", content=TextContent(type="text", text="Thanks, no tool needed")),
+    ]
+    validate_tool_use_result_messages(messages)
