@@ -1,7 +1,7 @@
 import base64
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Literal, TypedDict
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import anyio
@@ -65,6 +65,89 @@ from mcp.shared.exceptions import MCPError
 from mcp.shared.uri_template import InvalidUriTemplate
 
 pytestmark = pytest.mark.anyio
+
+
+class RecursiveModelOutput(BaseModel):
+    name: str
+    children: list["RecursiveModelOutput"] = []
+
+
+class RecursiveTypedDictOutput(TypedDict):
+    name: str
+    children: list["RecursiveTypedDictOutput"]
+
+
+@pytest.mark.parametrize("mode", ["legacy", "2026-07-28"])
+async def test_recursive_tool_output_schemas_list_on_every_protocol(
+    mode: Literal["legacy", "2026-07-28"],
+) -> None:
+    """Recursive object schemas remain listable on legacy and modern protocol versions."""
+
+    def model_tree() -> RecursiveModelOutput:
+        return RecursiveModelOutput(name="root")
+
+    def typed_dict_tree() -> RecursiveTypedDictOutput:
+        return {"name": "root", "children": []}
+
+    mcp = MCPServer("recursive-output")
+    mcp.add_tool(model_tree)
+    mcp.add_tool(typed_dict_tree)
+
+    async with Client(mcp, mode=mode) as client:
+        tools = await client.list_tools()
+
+    assert {tool.name: tool.output_schema for tool in tools.tools} == snapshot(
+        {
+            "model_tree": {
+                "$defs": {
+                    "RecursiveModelOutput": {
+                        "properties": {
+                            "name": {"title": "Name", "type": "string"},
+                            "children": {
+                                "default": [],
+                                "items": {"$ref": "#/$defs/RecursiveModelOutput"},
+                                "title": "Children",
+                                "type": "array",
+                            },
+                        },
+                        "required": ["name"],
+                        "title": "RecursiveModelOutput",
+                        "type": "object",
+                    }
+                },
+                "$ref": "#/$defs/RecursiveModelOutput",
+                "type": "object",
+            },
+            "typed_dict_tree": {
+                "$defs": {
+                    "RecursiveTypedDictOutput": {
+                        "properties": {
+                            "name": {"title": "Name", "type": "string"},
+                            "children": {
+                                "items": {"$ref": "#/$defs/RecursiveTypedDictOutput"},
+                                "title": "Children",
+                                "type": "array",
+                            },
+                        },
+                        "required": ["name", "children"],
+                        "title": "RecursiveTypedDictOutput",
+                        "type": "object",
+                    }
+                },
+                "properties": {
+                    "name": {"title": "Name", "type": "string"},
+                    "children": {
+                        "items": {"$ref": "#/$defs/RecursiveTypedDictOutput"},
+                        "title": "Children",
+                        "type": "array",
+                    },
+                },
+                "required": ["name", "children"],
+                "title": "RecursiveTypedDictOutput",
+                "type": "object",
+            },
+        }
+    )
 
 
 class TestServer:

@@ -10,12 +10,38 @@ from typing import Annotated, Any, Final, NamedTuple, TypedDict
 import annotated_types
 import pytest
 from dirty_equals import IsPartialDict
+from inline_snapshot import snapshot
 from mcp_types import CallToolResult, ContentBlock, EmbeddedResource, InputRequiredResult, TextContent
 from pydantic import BaseModel, Field
+from pydantic.root_model import RootModel
 
 from mcp.server.mcpserver import Audio, Image
 from mcp.server.mcpserver.exceptions import InvalidSignature
 from mcp.server.mcpserver.utilities.func_metadata import func_metadata
+
+
+class RecursiveListOutput(RootModel[list["RecursiveListOutput"]]):
+    pass
+
+
+def test_recursive_non_object_output_schema_keeps_its_root_type() -> None:
+    """Legacy object normalization does not misrepresent recursive array schemas."""
+
+    def recursive_list() -> RecursiveListOutput:
+        return RecursiveListOutput([])
+
+    assert func_metadata(recursive_list).output_schema == snapshot(
+        {
+            "$defs": {
+                "RecursiveListOutput": {
+                    "items": {"$ref": "#/$defs/RecursiveListOutput"},
+                    "title": "RecursiveListOutput",
+                    "type": "array",
+                }
+            },
+            "$ref": "#/$defs/RecursiveListOutput",
+        }
+    )
 
 
 class SomeInputModelA(BaseModel):

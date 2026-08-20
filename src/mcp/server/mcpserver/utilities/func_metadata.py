@@ -491,6 +491,17 @@ def _try_create_model_and_schema(
             logger.info(f"Cannot create schema for type {type_expr} in {func_name}: {type(e).__name__}: {e}")
             return None, None, False
 
+        # Legacy `Tool.outputSchema` requires an explicit object type at the root.
+        root_ref = schema.get("$ref")
+        if isinstance(root_ref, str) and root_ref.startswith("#/$defs/"):
+            definition_name = root_ref.removeprefix("#/$defs/").replace("~1", "/").replace("~0", "~")
+            raw_definitions = schema.get("$defs")
+            definitions = cast(dict[str, Any], raw_definitions) if isinstance(raw_definitions, dict) else {}
+            root_definition = definitions.get(definition_name)
+            typed_root = cast(dict[str, Any], root_definition) if isinstance(root_definition, dict) else {}
+            if typed_root.get("type") == "object":
+                schema["type"] = "object"
+
         return model, schema, wrap_output
 
     return None, None, False
